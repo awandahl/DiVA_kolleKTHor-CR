@@ -43,7 +43,7 @@ def build_diva_url(from_year: int, to_year: int) -> str:
         "aq2": aq2,
         "onlyFullText": "false",
         "noOfRows": "9999",
-        "sortOrder": "title_sort_asc",
+        "sortOrder": "dateIssued_sort_asc",
         "sortOrder2": "title_sort_asc",
         "csvType": "publication",
         "fl": "PID,PublicationType,Year,DOI,ISI,ScopusId,Title",
