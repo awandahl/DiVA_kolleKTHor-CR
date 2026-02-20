@@ -77,7 +77,7 @@ Where you can change:
 - **Year window**:
     - Adjust `FROM_YEAR` and `TO_YEAR` to any range you want.
 - **Portal**:
-    - Change `DIVA_PORTAL` to another DiVA site (`"www"`, `"umu"`, `"lnu"`, etc.).
+    - Change `DIVA_PORTAL` to another DiVA site (`"his"`, `"umu"`, `"lnu"`, etc.).
 - **Identifier logic**:
     - Scopus‑only: `SCOPUS_ONLY = True`, `ISI_ONLY = False`, `BOTH_TYPES = False`.
     - ISI‑only: `SCOPUS_ONLY = False`, `ISI_ONLY = True`, `BOTH_TYPES = False`.
