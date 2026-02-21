@@ -7,8 +7,8 @@ from urllib.parse import quote
 
 # -------------------- CONFIG --------------------
 
-FROM_YEAR =  2023
-TO_YEAR = 2023
+FROM_YEAR =  2025
+TO_YEAR = 2025
 
 # which DiVA portal to use: e.g. "kth", "uu", "umu", "lnu", etc.
 DIVA_PORTAL = "kth"
@@ -25,9 +25,10 @@ MAX_ACCEPTED = 9999
 CROSSREF_ROWS_PER_QUERY = 5
 MAILTO = "aw@kth.se"  # Your email address
 
-DOWNLOADED_CSV = "diva_raw.csv"
-OUTPUT_CSV = "doi_candidates.csv"
-EXCEL_OUT = "doi_candidates_links.xlsx"
+RANGE_PREFIX = f"{FROM_YEAR}-{TO_YEAR}_"
+DOWNLOADED_CSV = RANGE_PREFIX + "diva_raw.csv"
+OUTPUT_CSV = RANGE_PREFIX + "doi_candidates.csv"
+EXCEL_OUT = RANGE_PREFIX + "doi_candidates_links.xlsx"
 
 # -------------------- HELPERS --------------------
 
@@ -45,7 +46,7 @@ def build_diva_url(from_year: int, to_year: int) -> str:
         "aqe": "[]",
         "aq2": aq2,
         "onlyFullText": "false",
-        "noOfRows": "1000",
+        "noOfRows": "99999",
         "sortOrder": "title_sort_asc",
         "sortOrder2": "title_sort_asc",
         "csvType": "publication",
@@ -137,7 +138,6 @@ def make_isi_url(isi: str) -> str:
     isi = isi.strip()
     if not isi:
         return ""
-    # assume ISI/WOS is like "WOS:001606495100001"
     return (
         "https://gateway.webofknowledge.com/api/gateway"
         "?GWVersion=2&SrcAuth=Name&SrcApp=sfx&DestApp=WOS"
@@ -148,17 +148,16 @@ def make_pid_url(pid: str) -> str:
     pid = pid.strip()
     if not pid:
         return ""
-
+    
     # If PID is a plain number like "1949624", turn it into "diva2:1949624"
     if pid.isdigit():
         pid_value = f"diva2:{pid}"
     else:
         pid_value = pid
-
+    
     encoded_pid = quote(pid_value, safe="")  # diva2%3A1949624
-
+    
     return f"https://{DIVA_PORTAL}.diva-portal.org/smash/record.jsf?pid={encoded_pid}"
-
 
 # -------------------- MAIN --------------------
 
@@ -288,28 +287,52 @@ def main():
     mask_has_possible = df_work["Possible DOI:s"].str.strip() != ""
     df_out = df_work[mask_has_possible].copy()
 
+    # Reorder CSV columns: PID, Possible DOI:s, ISI, ScopusId first, then rest
+    csv_col_order = [
+        "PID", "Possible DOI:s", "DOI", "ISI", "ScopusId", 
+        "Title", "Year", "PublicationType",
+        "Journal", "Volume", "Issue", "Pages", "StartPage", "EndPage",
+        "JournalISSN", "JournalEISSN",
+        "SeriesISSN", "SeriesEISSN",
+        "ISBN", "ISBN_PRINT", "ISBN_ELECTRONIC", "ISBN_UNDEFINED",
+        "ArticleId", "PMID"
+    ]
+    # keep only columns that exist
+    csv_col_order = [c for c in csv_col_order if c in df_out.columns]
+    # append any remaining columns not in the list
+    remaining = [c for c in df_out.columns if c not in csv_col_order]
+    csv_col_order.extend(remaining)
+    df_out = df_out[csv_col_order]
+
     df_out.to_csv(OUTPUT_CSV, index=False)
     print(f"\nAccepted {accepted_count} records.")
     print(f"Wrote {len(df_out)} rows with Possible DOI:s to {OUTPUT_CSV}")
 
     # 6) Make Excel with clickable links
     df_links = df_out.copy()
-    df_links["Scopus_link"] = df_links["ScopusId"].apply(make_scopus_url)
+    df_links["PID_link"] = df_links["PID"].apply(make_pid_url)
     df_links["DOI_link"] = df_links["Possible DOI:s"].apply(make_doi_url)
     df_links["ISI_link"] = df_links["ISI"].apply(make_isi_url)
-    df_links["PID_link"] = df_links["PID"].apply(make_pid_url)
+    df_links["Scopus_link"] = df_links["ScopusId"].apply(make_scopus_url)
 
-    # optionally move link columns next to their ids
-    cols = df_links.columns.tolist()
-    for id_col, link_col in [
-        ("ScopusId", "Scopus_link"),
-        ("Possible DOI:s", "DOI_link"),
-        ("ISI", "ISI_link"),
-        ("PID", "PID_link"),
-    ]:
-        if id_col in cols and link_col in cols:
-            cols.insert(cols.index(id_col) + 1, cols.pop(cols.index(link_col)))
-    df_links = df_links[cols]
+    # Reorder Excel columns: PID, PID_link, Possible DOI:s, DOI_link, ISI, ISI_link, ScopusId, Scopus_link, then rest
+    excel_col_order = [
+        "PID", "PID_link",
+        "Possible DOI:s", "DOI_link",
+        "DOI",
+        "ISI", "ISI_link",
+        "ScopusId", "Scopus_link",
+        "Title", "Year", "PublicationType",
+        "Journal", "Volume", "Issue", "Pages", "StartPage", "EndPage",
+        "JournalISSN", "JournalEISSN",
+        "SeriesISSN", "SeriesEISSN",
+        "ISBN", "ISBN_PRINT", "ISBN_ELECTRONIC", "ISBN_UNDEFINED",
+        "ArticleId", "PMID"
+    ]
+    excel_col_order = [c for c in excel_col_order if c in df_links.columns]
+    remaining = [c for c in df_links.columns if c not in excel_col_order]
+    excel_col_order.extend(remaining)
+    df_links = df_links[excel_col_order]
 
     # write Excel with real hyperlink cells that open in browser
     with pd.ExcelWriter(EXCEL_OUT, engine="xlsxwriter") as writer:
@@ -320,18 +343,18 @@ def main():
         col_idx = {name: i for i, name in enumerate(header)}
 
         for row_xl, df_idx in enumerate(df_links.index, start=1):
-            if df_links.at[df_idx, "Scopus_link"]:
-                url = df_links.at[df_idx, "Scopus_link"]
-                ws.write_url(row_xl, col_idx["Scopus_link"], url, string="Scopus")
+            if df_links.at[df_idx, "PID_link"]:
+                url = df_links.at[df_idx, "PID_link"]
+                ws.write_url(row_xl, col_idx["PID_link"], url, string="PID")
             if df_links.at[df_idx, "DOI_link"]:
                 url = df_links.at[df_idx, "DOI_link"]
                 ws.write_url(row_xl, col_idx["DOI_link"], url, string="DOI")
             if df_links.at[df_idx, "ISI_link"]:
                 url = df_links.at[df_idx, "ISI_link"]
                 ws.write_url(row_xl, col_idx["ISI_link"], url, string="ISI")
-            if df_links.at[df_idx, "PID_link"]:
-                url = df_links.at[df_idx, "PID_link"]
-                ws.write_url(row_xl, col_idx["PID_link"], url, string="PID")
+            if df_links.at[df_idx, "Scopus_link"]:
+                url = df_links.at[df_idx, "Scopus_link"]
+                ws.write_url(row_xl, col_idx["Scopus_link"], url, string="Scopus")
 
     print(f"Wrote Excel with links to {EXCEL_OUT}")
 
