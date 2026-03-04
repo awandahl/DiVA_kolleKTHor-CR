@@ -14,7 +14,7 @@ Outputs:
 
 ## Overview of the workflow
 
-1. Build a DiVA export URL for `FROM_YEAR`–`TO_YEAR` using the `export.jsf` endpoint and a CSV field list.[web:104][web:19]  
+1. Build a DiVA export URL for `FROM_YEAR`–`TO_YEAR` using the `export.jsf` endpoint and a CSV field list.
 2. Download the CSV and read it into a pandas DataFrame.  
 3. Filter to:
    - Records within the year range.
@@ -23,7 +23,7 @@ Outputs:
    - Records with non-empty `Title` and `Year`.  
 4. For each remaining record:
    - Derive a coarse publication category (`article`, `conference`, `chapter`, `book`) from DiVA’s `PublicationType`.
-   - Query Crossref `/works` with `query.title` and a publication-year filter.[web:64][web:92]
+   - Query Crossref `/works` with `query.title` and a publication-year filter.
    - For each Crossref candidate:
      - Check title similarity and publication year.
      - Map Crossref `type` to a coarse category and enforce a type match.
@@ -95,7 +95,7 @@ You normally only change:
 `build_diva_url` constructs a CSV export URL to `.../smash/export.jsf` including:
     - Date filter: `dateIssued` between `FROM_YEAR` and `TO_YEAR`.
     - Publication types: bookReview, review, article, book, chapter, conferencePaper.
-    - Fields: `PID`, `DOI`, `ISI`, `ScopusId`, `PMID`, title, year, journal, volume/issue/pages, ISSNs/ISBNs, authors, notes etc.[web:104][web:19]
+    - Fields: `PID`, `DOI`, `ISI`, `ScopusId`, `PMID`, title, year, journal, volume/issue/pages, ISSNs/ISBNs, authors, notes etc.
 2. **Initial filtering in the script**
 
 After reading the CSV:
@@ -138,7 +138,7 @@ On the Crossref side, `crossref_type_category` maps `message["type"]` to the sam
 - `journal-article`, `journal-review`, `peer-review` → article
 - `proceedings-article`, `proceedings-paper`, `conference-paper` → conference
 - `book-chapter`, `chapter` → chapter
-- `book` → book[web:64][web:89]
+- `book` → book
 
 A Crossref candidate is skipped if both sides have a category and they do not match.
 
@@ -151,7 +151,7 @@ For each DiVA record:
 1. `search_crossref_title` calls `/works` with:
     - `query.title` = cleaned DiVA title.
     - `filter` = `from-pub-date:YYYY-01-01,until-pub-date:YYYY-12-31` based on DiVA `Year`.
-    - `rows` = `CROSSREF_ROWS_PER_QUERY` and `select=DOI,title,issued,type` for efficiency.[web:92][web:64]
+    - `rows` = `CROSSREF_ROWS_PER_QUERY` and `select=DOI,title,issued,type` for efficiency.
 2. For each Crossref candidate:
     - Discard if the publication year from `issued["date-parts"]` does not equal the DiVA year.
     - Discard if Crossref type category conflicts with DiVA category.
@@ -164,7 +164,7 @@ The best similarity score among candidates above threshold is kept as a potentia
 
 ## Per-type verification checks
 
-For candidates that pass title similarity + year (+ type category), the script fetches full metadata (`/works/{doi}`) and applies **type-dependent checks**.[web:64][web:108]
+For candidates that pass title similarity + year (+ type category), the script fetches full metadata (`/works/{doi}`) and applies **type-dependent checks**.
 
 ### Common building blocks
 
@@ -192,7 +192,7 @@ Used for **conference papers** and **chapters** to connect a chapter/paper to it
         - Normalized by stripping non-digits and `X/x`.
     - Crossref ISBNs: `message["ISBN"]`, similarly normalized.
 
-Host ISBN check is True if `host_isbns ∩ crossref_isbns` is non-empty.[web:95][web:107]
+Host ISBN check is True if `host_isbns ∩ crossref_isbns` is non-empty.
 - **Book ISBN match** (`extract_diva_book_isbns` + `extract_crossref_isbns`):
 
 Used for **books**:
