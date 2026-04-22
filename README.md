@@ -3,7 +3,7 @@
 
 Detta skript skördar **publikationer från en DiVA-portal** för ett givet **årsintervall** och försöker hitta saknade **DOI:er** via **Crossref REST API**. Det fokuserar på poster **utan några externa identifierare** (**DOI**, **ISI**, **ScopusId**, **PMID**) och klassar Crossref-träffar som antingen **verifierade** eller **möjliga** DOI:er, med **verifieringsregler per publikationstyp**.
 
-Det finns även en syster–/komplement–lösning för **Web of Science–matchning**, se repot [**DiVA_kolleKTHor-WoS](https://github.com/awandahl/DiVA_kolleKTHor-WoS).
+Det finns även en syster–/komplement–lösning för **Web of Science–matchning**, se repot [**DiVA_kolleKTHor-WoS***](https://github.com/awandahl/DiVA_kolleKTHor-WoS).
 
 **Utdata:**
 
