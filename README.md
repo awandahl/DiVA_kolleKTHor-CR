@@ -1,65 +1,67 @@
 
 # DiVA-kolleKTHor-CR
 
+Detta skript skördar **publikationer från en DiVA-portal** för ett givet **årsintervall** och försöker hitta saknade **DOI:er** via **Crossref REST API**. Det fokuserar på poster **utan några externa identifierare** (**DOI**, **ISI**, **ScopusId**, **PMID**) och klassar Crossref-träffar som antingen **verifierade** eller **möjliga** DOI:er, med **verifieringsregler per publikationstyp**.[^1]
 
-This script harvests publications from a DiVA portal for a given year range and tries to find missing DOIs via the Crossref REST API. It focuses on records **without any external identifiers** (DOI, ISI, ScopusId, PMID) and classifies Crossref matches as either **verified** or **possible** DOIs, with per–publication-type verification rules.
+Det finns även en syster–/komplement–lösning för **Web of Science–matchning**, se repot **DiVA_kolleKTHor-WoS**:
+**https://github.com/awandahl/DiVA_kolleKTHor-WoS**.[^1]
 
-Outputs:
+**Utdata:**
 
-- A raw DiVA CSV snapshot for the given year range.  
-- A CSV with DOI candidates (`Verified_DOI` / `Possible_DOI` + check flags).  
-- An Excel file with the same data plus clickable links back to DiVA and to the DOI resolver.
+- En **rå DiVA-CSV** för valt årsintervall.
+- En **CSV med DOI-kandidater** (`Verified_DOI` / `Possible_DOI` + checkflaggor).
+- En **Excel-fil** med samma data samt klickbara länkar tillbaka till **DiVA** och till **DOI-resolvern**.
 
----
+***
 
-## Overview of the workflow
+## 1. Översikt över arbetsflödet
 
-1. Build a DiVA export URL for `FROM_YEAR`–`TO_YEAR` using the `export.jsf` endpoint and a CSV field list.
-2. Download the CSV and read it into a pandas DataFrame.  
-3. Filter to:
-   - Records within the year range.
-   - Publication types: article, review, book, chapter, conference paper.
-   - Records with **no** DOI, ISI, ScopusId, or PMID.
-   - Records with non-empty `Title` and `Year`.  
-4. For each remaining record:
-   - Derive a coarse publication category (`article`, `conference`, `chapter`, `book`) from DiVA’s `PublicationType`.
-   - Query Crossref `/works` with `query.title` and a publication-year filter.
-   - For each Crossref candidate:
-     - Check title similarity and publication year.
-     - Map Crossref `type` to a coarse category and enforce a type match.
-     - Fetch full Crossref metadata for promising candidates.
-     - Apply **type-specific verification checks** (ISSN, biblio, authors, host/book ISBN).
-   - If a candidate passes *all* required checks → record as `Verified_DOI`.  
-   - If no candidate fully verifies, but one passes similarity + type/year → record the best as `Possible_DOI`.  
-   - If even that fails but there is a perfect title match, record that DOI as `Possible_DOI` with `"title_only"` flags.
-5. Write out CSV and Excel with:
-   - `Verified_DOI`, `Possible_DOI`.
-   - `Check_*` columns summarizing which checks passed.
-   - Links back to DiVA (`PID_link`) and to the DOI (`*_DOI_link`).
+1. Bygg en **DiVA-export-URL** för `FROM_YEAR`–`TO_YEAR` med hjälp av endpointen `export.jsf` och en lista över CSV-fält.
+2. Ladda ner CSV-filen och läs in den i en **pandas DataFrame**.
+3. Filtrera till:
+    - Poster inom det givna **årsintervallet**.
+    - **Publikationstyper**: article, review, book, chapter, conference paper.
+    - Poster **utan** DOI, ISI, ScopusId eller PMID.
+    - Poster med **icke-tomma** fält `Title` och `Year`.
+4. För varje kvarvarande post:
+    - Härled en grov **publikationskategori** (`article`, `conference`, `chapter`, `book`) från DiVA-fältet `PublicationType`.
+    - Fråga Crossref `/works` med `query.title` och ett filter på **publiceringsår**.
+    - För varje Crossref-kandidat:
+        - Kontrollera **titellikhet** och **publiceringsår**.
+        - Mappa Crossrefs `type` till en grov kategori och kräv **typmatchning**.
+        - Hämta full **Crossref-metadata** för lovande kandidater.
+        - Applicera **typspecifika verifieringskontroller** (ISSN, bibliografiska data, författare, host-/bok-ISBN).
+    - Om en kandidat klarar *alla* nödvändiga kontroller → lagra som `Verified_DOI`.
+    - Om ingen kandidat blir fullt verifierad, men någon klarar likhet + typ/år → lagra bästa kandidaten som `Possible_DOI`.
+    - Om inte ens detta lyckas, men det finns en **perfekt titelmatch** → lagra den DOI:n som `Possible_DOI` med flaggor `"title_only"`.
+5. Skriv ut **CSV och Excel** med:
+    - `Verified_DOI`, `Possible_DOI`.
+    - Kolumner `Check_*` som sammanfattar vilka kontroller som gått igenom.
+    - Länkar tillbaka till DiVA (`PID_link`) och till DOI (`*_DOI_link`).
 
----
+***
 
-## Requirements and installation
+## 2. Krav och installation
 
-- Python 3.9+ recommended.
-- Packages:
-  - `requests`
-  - `pandas`
-  - `tqdm`
-  - `xlsxwriter` (via pandas ExcelWriter)
+- **Python 3.9+** rekommenderas.
+- Paket:
+    - `requests`
+    - `pandas`
+    - `tqdm`
+    - `xlsxwriter` (via pandas **ExcelWriter**)
 
-Install dependencies, for example:
+Installera beroenden, t.ex.:
 
 ```bash
 pip install requests pandas tqdm xlsxwriter
 ```
 
 
----
+***
 
-## Configuration
+## 3. Konfiguration
 
-At the top of the script:
+Längst upp i skriptet:
 
 ```python
 FROM_YEAR = 2001
@@ -74,45 +76,48 @@ CROSSREF_ROWS_PER_QUERY = 5 # max Crossref candidates per title/year
 MAILTO = "email@domain.org" # your email for Crossref polite usage
 ```
 
-Filenames are derived from portal + year range + a timestamp:
+Filnamn härleds från **portal + årsspann + timestamp**:
 
 - `kth_2001-2002_diva_raw.csv`
 - `kth_2001-2002_diva_doi_candidates_YYYYMMDD-HHMMSS.csv`
 - `kth_2001-2002_diva_doi_candidates_YYYYMMDD-HHMMSS.xlsx`
 
-You normally only change:
+Normalt behöver du bara ändra:
 
 - `FROM_YEAR`, `TO_YEAR`
 - `DIVA_PORTAL`
 - `MAILTO`
 
----
+***
 
-## How DiVA records are selected
+## 4. Hur DiVA-poster väljs ut
 
-1. **Export from DiVA**
+### 4.1 Export från DiVA
 
-`build_diva_url` constructs a CSV export URL to `.../smash/export.jsf` including:
-    - Date filter: `dateIssued` between `FROM_YEAR` and `TO_YEAR`.
-    - Publication types: bookReview, review, article, book, chapter, conferencePaper.
-    - Fields: `PID`, `DOI`, `ISI`, `ScopusId`, `PMID`, title, year, journal, volume/issue/pages, ISSNs/ISBNs, authors, notes etc.
-    
-2. **Initial filtering in the script**
+Funktionen **`build_diva_url`** bygger en **CSV-export-URL** till `.../smash/export.jsf` som inkluderar:
 
-After reading the CSV:
-    - Year range is re-checked from the `Year` column.
-    - Titles like `Foreword` / `Preface` are excluded.
-    - Only records with:
-        - Empty `DOI`, `ISI`, `ScopusId`, `PMID` (if `NO_ID_ONLY = True`).
-        - Non-empty `Title` and `Year`.
+- Datumfilter: `dateIssued` mellan `FROM_YEAR` och `TO_YEAR`.
+- Publikationstyper: **bookReview, review, article, book, chapter, conferencePaper**.
+- Fält: `PID`, `DOI`, `ISI`, `ScopusId`, `PMID`, titel, år, tidskrift, volym/nummer/sidor, ISSN/ISBN, författare, anteckningar etc.
 
-The resulting subset (`df_work`) is the set of DiVA records the script tries to enrich with DOIs.
 
----
+### 4.2 Initial filtrering i skriptet
 
-## Publication type categories
+Efter inläsning av CSV-filen:
 
-`diva_pubtype_category` maps a DiVA `PublicationType` string to a coarse category:
+- Årsintervallet dubbelkollas mot kolumnen **`Year`**.
+- Titlar som `Foreword` / `Preface` exkluderas.
+- Endast poster där:
+    - `DOI`, `ISI`, `ScopusId`, `PMID` är tomma (om `NO_ID_ONLY = True`).
+    - `Title` och `Year` inte är tomma.
+
+Detta ger subsetet **`df_work`**, dvs de DiVA-poster som skriptet försöker berika med **DOI:er**.
+
+***
+
+## 5. Publikationstyp–kategorier
+
+Funktionen **`diva_pubtype_category`** mappar DiVA-fältet `PublicationType` till en grov kategori:
 
 - **Article**
     - `article`
@@ -132,79 +137,80 @@ The resulting subset (`df_work`) is the set of DiVA records the script tries to 
     - `book`
     - `monograph`
 
-Anything else returns `None` and is treated as “unknown type”; in that case the script still requires authors and basic biblio for verification, but no ISSN/ISBN checks.
+Allt annat returnerar **`None`** och behandlas som “okänd typ”; i dessa fall kräver skriptet fortfarande **författare** och **bibliografiska data** för verifiering, men gör inga ISSN/ISBN-kontroller.
 
-On the Crossref side, `crossref_type_category` maps `message["type"]` to the same categories:
+På Crossref-sidan mappar **`crossref_type_category`** `message["type"]` till samma kategorier:
 
-- `journal-article`, `journal-review`, `peer-review` → article
-- `proceedings-article`, `proceedings-paper`, `conference-paper` → conference
-- `book-chapter`, `chapter` → chapter
-- `book` → book
+- `journal-article`, `journal-review`, `peer-review` → **article**
+- `proceedings-article`, `proceedings-paper`, `conference-paper` → **conference**
+- `book-chapter`, `chapter` → **chapter**
+- `book` → **book**
 
-A Crossref candidate is skipped if both sides have a category and they do not match.
+En Crossref-kandidat hoppas över om båda sidor har en kategori och dessa **inte** matchar.
 
----
+***
 
-## Title similarity and candidate selection
+## 6. Titellikhet och urval av kandidater
 
-For each DiVA record:
+För varje DiVA-post:
 
-1. `search_crossref_title` calls `/works` with:
-    - `query.title` = cleaned DiVA title.
-    - `filter` = `from-pub-date:YYYY-01-01,until-pub-date:YYYY-12-31` based on DiVA `Year`.
-    - `rows` = `CROSSREF_ROWS_PER_QUERY` and `select=DOI,title,issued,type` for efficiency.
-2. For each Crossref candidate:
-    - Discard if the publication year from `issued["date-parts"]` does not equal the DiVA year.
-    - Discard if Crossref type category conflicts with DiVA category.
-    - Compute Jaccard-like title similarity: tokenized lowercase title, intersection/union of word sets.
-    - Keep only candidates with `sim ≥ SIM_THRESHOLD`.
+1. **`search_crossref_title`** anropar `/works` med:
+    - `query.title` = städad DiVA-titel.
+    - `filter` = `from-pub-date:YYYY-01-01,until-pub-date:YYYY-12-31` baserat på DiVA-fältet `Year`.
+    - `rows` = `CROSSREF_ROWS_PER_QUERY` samt `select=DOI,title,issued,type` för effektivitet.
+2. För varje Crossref-kandidat:
+    - Kasta bort om publiceringsår i `issued["date-parts"]` inte matchar DiVA-år.
+    - Kasta bort om Crossref-typen inte stämmer med DiVA-kategorin.
+    - Beräkna **Jaccard-liknande titellikhet**: tokeniserad, gemener, intersection/union på ordmängder.
+    - Behåll endast kandidater med `sim ≥ SIM_THRESHOLD`.
 
-The best similarity score among candidates above threshold is kept as a potential **possible match**, while stronger conditions must hold for a **verified match**.
+Den bästa likhetspoängen bland kandidater över tröskeln sparas som en potentiell **möjlig träff**, medan **starkare villkor** krävs för en **verifierad träff**.
 
----
+***
 
-## Per-type verification checks
+## 7. Verifieringskontroller per typ
 
-For candidates that pass title similarity + year (+ type category), the script fetches full metadata (`/works/{doi}`) and applies **type-dependent checks**.
+För kandidater som klarar **titel+år** (och ev. typkategori) hämtar skriptet full metadata (`/works/{doi}`) och kör **typberoende kontroller**.
 
-### Common building blocks
+### 7.1 Gemensamma byggstenar
 
-- **Bibliographic match** (`bibliographic_match`):
-    - Compares DiVA vs Crossref for:
-        - Volume
-        - Issue
-        - Start page (or article number)
-        - End page
-    - For any field present on both sides, it logs match/mismatch and returns True only if *all compared fields* match.
-- **ISSN match** (`issn_match`):
+- **Bibliografisk match** (`bibliographic_match`):
+    - Jämför DiVA vs Crossref för:
+        - **Volym**
+        - **Nummer**
+        - **Startsida** (eller artikelnr)
+        - **Slutsida**
+    - För varje fält som finns på båda sidor loggas match/mismatch.
+    - Returnerar **True** endast om *alla jämförda fält* matchar.
+- **ISSN-match** (`issn_match`):
     - DiVA: `JournalISSN`, `JournalEISSN`, `SeriesISSN`, `SeriesEISSN`.
-    - Crossref: `ISSN` array + `journal-issue.ISSN`.
-    - True if the normalized ISSN sets intersect.
-- **Author match** (`authors_match`):
-    - DiVA: parses the `Name` column, strips local IDs and affiliations, assumes `Family, Given` format, uses just family names.
-    - Crossref: uses `author[i]["family"]`.
-    - True if there is at least one shared family name.
-- **Host ISBN match** (`extract_host_isbns` + `extract_crossref_isbns`):
+    - Crossref: `ISSN`-array + `journal-issue.ISSN`.
+    - True om normaliserade ISSN-mängder har **icke-tom skärning**.
+- **Författarmatch** (`authors_match`):
+    - DiVA: parsar kolumnen **`Name`**, tar bort lokala ID:n och affiliationer, antar formatet `Family, Given` och använder bara efternamn.
+    - Crossref: använder `author[i]["family"]`.
+    - True om det finns **minst ett gemensamt efternamn**.
+- **Host-ISBN-match** (`extract_host_isbns` + `extract_crossref_isbns`):
 
-Used for **conference papers** and **chapters** to connect a chapter/paper to its host proceedings/book.
-    - DiVA host ISBNs:
-        - Any value in `ISBN`, `ISBN_PRINT`, `ISBN_ELECTRONIC` (for older records where host ISBNs were put directly on the item).
-        - Any ISBN pattern found in `Notes` (e.g. “Part of ISBN 978-1-2345-6789-0”, “Part of book ISBN …”, “Part of proceedings ISBN …”).
-        - Normalized by stripping non-digits and `X/x`.
-    - Crossref ISBNs: `message["ISBN"]`, similarly normalized.
+Används för **konferensartiklar** och **kapitel** för att koppla en artikel/ett kapitel till sitt **värdverk** (proceedings/bok).
+    - DiVA-host-ISBN:
+        - Alla värden i `ISBN`, `ISBN_PRINT`, `ISBN_ELECTRONIC` (för äldre poster där host-ISBN lagts direkt på posten).
+        - Alla ISBN-mönster i `Notes` (t.ex. “Part of ISBN 978-1-2345-6789-0”, “Part of book ISBN …”, “Part of proceedings ISBN …”).
+        - Normaliseras genom att ta bort alla tecken utom siffror och `X/x`.
+    - Crossref-ISBN: `message["ISBN"]`, normaliserat på samma sätt.
 
-Host ISBN check is True if `host_isbns ∩ crossref_isbns` is non-empty.
-- **Book ISBN match** (`extract_diva_book_isbns` + `extract_crossref_isbns`):
+Host-ISBN-match är True om `host_isbns ∩ crossref_isbns` är icke-tom.
+- **Bok-ISBN-match** (`extract_diva_book_isbns` + `extract_crossref_isbns`):
 
-Used for **books**:
-    - DiVA: ISBNs from `ISBN`, `ISBN_PRINT`, `ISBN_ELECTRONIC`.
+Används för **böcker**:
+    - DiVA: ISBN från `ISBN`, `ISBN_PRINT`, `ISBN_ELECTRONIC`.
     - Crossref: `message["ISBN"]`.
-    - True if the normalized sets intersect.
+    - True om de normaliserade mängderna har **icke-tom skärning**.
 
 
-### Category-specific rules
+### 7.2 Typberoende regler
 
-For each candidate, the script sets booleans:
+För varje kandidat sätter skriptet booleans:
 
 ```python
 need_issn
@@ -214,7 +220,7 @@ need_host_isbn
 need_book_isbn
 ```
 
-Then evaluates:
+Sedan utvärderas:
 
 ```python
 all_ok = (
@@ -226,125 +232,136 @@ all_ok = (
 )
 ```
 
-and uses `all_ok` to decide if the candidate is **verified**.
+`all_ok` används för att avgöra om kandidaten är **verifierad**.
 
-#### Article (journal article / review)
+#### 7.2.1 Artikel (tidskriftsartikel / review)
 
-Conditions:
+Villkor:
 
-- Title similarity ≥ `SIM_THRESHOLD`.
-- Year match.
-- Crossref type maps to `article`.
-- **Required:**
-    - ISSN match (`need_issn = True`).
-    - Bibliographic match on volume/issue/pages (`need_biblio = True`).
-    - Author overlap (`need_authors = True`).
+- Titellikhet ≥ `SIM_THRESHOLD`.
+- År matchar.
+- Crossref-typ mappar till **article**.
+- **Krav:**
+    - ISSN-match (`need_issn = True`).
+    - Bibliografisk match på volym/nummer/sidor (`need_biblio = True`).
+    - Författaröverlapp (`need_authors = True`).
 
-No ISBN checks are used for articles.
+Inga ISBN-kontroller används för artiklar.
 
-#### Conference paper
+#### 7.2.2 Konferensartikel
 
-Conditions:
+Villkor:
 
-- Title similarity ≥ `SIM_THRESHOLD`.
-- Year match.
-- Crossref type maps to `conference`.
-- **Required:**
-    - Bibliographic match on pages (and volume/issue if present) (`need_biblio = True`).
-    - Author overlap (`need_authors = True`).
-    - Host ISBN match (`need_host_isbn = True`) using misused ISBN fields and “Part of … ISBN …” strings in `Notes`.
+- Titellikhet ≥ `SIM_THRESHOLD`.
+- År matchar.
+- Crossref-typ mappar till **conference**.
+- **Krav:**
+    - Bibliografisk match på sidor (och volym/nummer om de finns) (`need_biblio = True`).
+    - Författaröverlapp (`need_authors = True`).
+    - Host-ISBN-match (`need_host_isbn = True`) baserat på “felanvända” ISBN-fält och “Part of … ISBN …” i `Notes`.
 
-ISSN is **not** required for conference papers.
+ISSN krävs **inte** för konferensartiklar.
 
-#### Chapter (book chapter)
+#### 7.2.3 Kapitel (bokkapitel)
 
-Conditions:
+Villkor:
 
-- Title similarity ≥ `SIM_THRESHOLD`.
-- Year match.
-- Crossref type maps to `chapter`.
-- **Required:**
-    - Bibliographic match on pages (and volume/issue if present) (`need_biblio = True`).
-    - Author overlap (`need_authors = True`).
-    - Host ISBN match (`need_host_isbn = True`) as above.
+- Titellikhet ≥ `SIM_THRESHOLD`.
+- År matchar.
+- Crossref-typ mappar till **chapter**.
+- **Krav:**
+    - Bibliografisk match på sidor (och volym/nummer om de finns) (`need_biblio = True`).
+    - Författaröverlapp (`need_authors = True`).
+    - Host-ISBN-match (`need_host_isbn = True`).
 
 
-#### Book
+#### 7.2.4 Bok
 
-Conditions:
+Villkor:
 
-- Title similarity ≥ `SIM_THRESHOLD`.
-- Year match.
-- Crossref type maps to `book`.
-- **Required:**
-    - Author overlap (`need_authors = True`).
-    - Book ISBN match (`need_book_isbn = True`) between DiVA ISBNs and Crossref ISBNs.
+- Titellikhet ≥ `SIM_THRESHOLD`.
+- År matchar.
+- Crossref-typ mappar till **book**.
+- **Krav:**
+    - Författaröverlapp (`need_authors = True`).
+    - Bok-ISBN-match (`need_book_isbn = True`) mellan DiVA- och Crossref-ISBN.
 
-No pages or ISSNs are required for books.
+Sidor eller ISSN krävs **inte** för böcker.
 
-#### Unknown / other types
+#### 7.2.5 Okänd / övriga typer
 
-If `diva_pubtype_category` returns `None`:
+Om `diva_pubtype_category` returnerar `None`:
 
-- The script still requires:
-    - Bibliographic match (`need_biblio = True`).
-    - Author overlap (`need_authors = True`).
-- ISSN and ISBN checks are disabled.
+- Skriptet kräver fortfarande:
+    - Bibliografisk match (`need_biblio = True`).
+    - Författaröverlapp (`need_authors = True`).
+- ISSN- och ISBN-kontroller är avstängda.
 
-This prevents “everything” from becoming verified when the type string is not recognized.
+Detta förhindrar att “allt” blir verifierat när publikationstypen inte känns igen.
 
----
+***
 
-## Verified vs possible DOIs
+## 8. Verifierade vs möjliga DOI:er
 
-For each DiVA record:
+För varje DiVA-post:
 
 1. **Verified DOI**
-    - If at least one candidate passes **all required checks** for its category (`all_ok=True`), the candidate with the highest similarity is stored as `Verified_DOI`.
-    - The script also stores:
-        - `Check_Category` (`article`, `conference`, `chapter`, `book`, or empty).
-        - `Check_ISSN_OK`, `Check_Biblio_OK`, `Check_Authors_OK`, `Check_HostISBN_OK`, `Check_BookISBN_OK` (string booleans).
+    - Om minst en kandidat klarar **alla nödvändiga kontroller** för sin kategori (`all_ok=True`) lagras kandidaten med högst likhet som `Verified_DOI`.
+    - Skriptet lagrar även:
+        - `Check_Category` (`article`, `conference`, `chapter`, `book` eller tomt).
+        - `Check_ISSN_OK`, `Check_Biblio_OK`, `Check_Authors_OK`, `Check_HostISBN_OK`, `Check_BookISBN_OK` (string-booleaner).
 2. **Possible DOI**
-    - If no candidate is fully verified but at least one has `sim ≥ SIM_THRESHOLD` and matches year/type:
-        - The best such candidate is stored as `Possible_DOI`.
-        - Its check results are stored in the same `Check_*` columns.
-    - If there is no such candidate, but there exists a **perfect title match** (`sim == 1.0`) with matching year:
-        - That DOI is stored as `Possible_DOI`.
-        - `Check_*` columns are set to `"title_only"` to indicate it is a title-only fallback.
-3. If neither verified nor possible conditions are met, the record is left without a DOI candidate.
+    - Om ingen kandidat blir fullt verifierad men minst en har `sim ≥ SIM_THRESHOLD` och matchar år/typ:
+        - Den bästa kandidaten lagras som `Possible_DOI`.
+        - Dess checkresultat lagras i samma `Check_*`-kolumner.
+    - Om det saknas sådana kandidater, men det finns en **perfekt titelmatch** (`sim == 1.0`) med rätt år:
+        - Den DOI:n lagras som `Possible_DOI`.
+        - `Check_*`-kolumnerna sätts till `"title_only"` för att signalera att det är en **ren titel–fallback**.
+3. Om varken verifierade eller möjliga villkor uppfylls lämnas posten utan DOI-kandidat.
 
----
+***
 
-## Running the script
+## 9. Körning av skriptet
 
-Run directly:
+Kör direkt:
 
 ```bash
 python DiVA_kolleKTHor.py
 ```
 
-To save a detailed log of the CLI output (for later inspection of decisions):
+För att spara en detaljerad **logg** av CLI-utdata (för senare granskning av beslut):
 
 ```bash
 python DiVA_kolleKTHor.py 2>&1 | tee kth_2001-2002_doi.log
 ```
 
-After completion, you will have:
+Efter körning får du:
 
-- `kth_2001-2002_diva_raw.csv` – the DiVA export snapshot.
-- `kth_2001-2002_diva_doi_candidates_YYYYMMDD-HHMMSS.csv` – candidates + checks.
-- `kth_2001-2002_diva_doi_candidates_YYYYMMDD-HHMMSS.xlsx` – same, with:
-    - `PID_link` – URL to the DiVA record.
+- `kth_2001-2002_diva_raw.csv` – DiVA-export (snapshot).
+- `kth_2001-2002_diva_doi_candidates_YYYYMMDD-HHMMSS.csv` – DOI-kandidater + kontroller.
+- `kth_2001-2002_diva_doi_candidates_YYYYMMDD-HHMMSS.xlsx` – samma, med:
+    - `PID_link` – URL till DiVA-posten.
     - `Verified_DOI_link` – `https://doi.org/<Verified_DOI>`.
     - `Possible_DOI_link` – `https://doi.org/<Possible_DOI>`.
 
-You can sort or filter on:
+Du kan sedan sortera/filtrera på:
 
-- `Check_Category` (article / conference / chapter / book).
-- `Check_*_OK` to find borderline matches.
-- `Verified_DOI` vs `Possible_DOI` to prioritize manual review.
+- `Check_Category` (**article / conference / chapter / book**).
+- `Check_*_OK` för att hitta **borderline–träffar**.
+- `Verified_DOI` vs `Possible_DOI` för att prioritera **manuell kontroll**.
 
----
+***
+
+## 10. Relation till DiVA_kolleKTHor-WoS
+
+Detta repo, **DiVA-kolleKTHor-CR**, fokuserar på **DOI-identifiering via Crossref**.[^1]
+Det kompletteras av **DiVA_kolleKTHor-WoS** som kan användas för **matchning mot Web of Science–data**, t.ex. för vidare analys eller kvalitetssäkring av publikationslistor:
+
+- **DiVA_kolleKTHor-WoS**: https://github.com/awandahl/DiVA_kolleKTHor-WoS[^1]
+
+Tillsammans kan dessa verktyg användas i ett mer komplett **work-flow för publikationsberikning och -validering**.
+
+***
 
 ## License
 
