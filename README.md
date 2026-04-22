@@ -1,10 +1,9 @@
 
 # DiVA-kolleKTHor-CR
 
-Detta skript skördar **publikationer från en DiVA-portal** för ett givet **årsintervall** och försöker hitta saknade **DOI:er** via **Crossref REST API**. Det fokuserar på poster **utan några externa identifierare** (**DOI**, **ISI**, **ScopusId**, **PMID**) och klassar Crossref-träffar som antingen **verifierade** eller **möjliga** DOI:er, med **verifieringsregler per publikationstyp**.[^1]
+Detta skript skördar **publikationer från en DiVA-portal** för ett givet **årsintervall** och försöker hitta saknade **DOI:er** via **Crossref REST API**. Det fokuserar på poster **utan några externa identifierare** (**DOI**, **ISI**, **ScopusId**, **PMID**) och klassar Crossref-träffar som antingen **verifierade** eller **möjliga** DOI:er, med **verifieringsregler per publikationstyp**.
 
-Det finns även en syster–/komplement–lösning för **Web of Science–matchning**, se repot **DiVA_kolleKTHor-WoS**:
-**https://github.com/awandahl/DiVA_kolleKTHor-WoS**.[^1]
+Det finns även en syster–/komplement–lösning för **Web of Science–matchning**, se repot [**DiVA_kolleKTHor-WoS](https://github.com/awandahl/DiVA_kolleKTHor-WoS).
 
 **Utdata:**
 
@@ -354,10 +353,10 @@ Du kan sedan sortera/filtrera på:
 
 ## 10. Relation till DiVA_kolleKTHor-WoS
 
-Detta repo, **DiVA-kolleKTHor-CR**, fokuserar på **DOI-identifiering via Crossref**.[^1]
+Detta repo, **DiVA-kolleKTHor-CR**, fokuserar på **DOI-identifiering via Crossref**.
 Det kompletteras av **DiVA_kolleKTHor-WoS** som kan användas för **matchning mot Web of Science–data**, t.ex. för vidare analys eller kvalitetssäkring av publikationslistor:
 
-- **DiVA_kolleKTHor-WoS**: https://github.com/awandahl/DiVA_kolleKTHor-WoS[^1]
+- **DiVA_kolleKTHor-WoS**: https://github.com/awandahl/DiVA_kolleKTHor-WoS
 
 Tillsammans kan dessa verktyg användas i ett mer komplett **work-flow för publikationsberikning och -validering**.
 
