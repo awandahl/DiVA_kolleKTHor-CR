@@ -1,5 +1,5 @@
 
-# DiVA-kolleKTHor
+# DiVA-kolleKTHor-CR
 
 
 This script harvests publications from a DiVA portal for a given year range and tries to find missing DOIs via the Crossref REST API. It focuses on records **without any external identifiers** (DOI, ISI, ScopusId, PMID) and classifies Crossref matches as either **verified** or **possible** DOIs, with per–publication-type verification rules.
